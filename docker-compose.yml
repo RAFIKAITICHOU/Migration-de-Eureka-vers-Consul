@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  consul:
+    image: hashicorp/consul:latest
+    container_name: consul-service
+    command: agent -dev -client=0.0.0.0
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+    networks:
+      - microservices-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-service
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: clientservicedb
+    ports:
+      - "3308:3306"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  client-service:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: client-service
+    ports:
+      - "8088:8088"
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/clientservicedb?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+    depends_on:
+      consul:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks:
+      - microservices-net
+
+  gateway-service:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gateway-service
+    ports:
+      - "8888:8888"
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      - consul
+    networks:
+      - microservices-net
+
+  car-service:
+    build:
+      context: ./car
+      dockerfile: Dockerfile
+    container_name: car-service
+    ports:
+      - "8082:8082"
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/carservicedb?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      GATEWAY_URL: http://gateway-service:8888
+    depends_on:
+      consul:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      gateway-service:
+        condition: service_started
+    networks:
+      - microservices-net
+
+networks:
+  microservices-net:
+    driver: bridge

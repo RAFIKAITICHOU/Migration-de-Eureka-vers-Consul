@@ -5,9 +5,15 @@ spring:
   application:
     name: Gateway
   cloud:
-    discovery:
-      enabled: true
-
-eureka:
-  instance:
-    hostname: localhost
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        service-name: Gateway
+        instance-id: ${spring.application.name}:${random.value}
+        prefer-ip-address: true
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: false
